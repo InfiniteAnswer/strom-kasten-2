@@ -20,8 +20,8 @@
 #define CALIBRATION_INTERVAL 600000
 #define CONSISTENCY_SAMPLES 5
 #define CONSISTENCY_TOLERANCE 20
+#define INTER_SAMPLE_DELAY 1
 
-int inter_sample_delay = 1;
 int number_samples_read = 0;
 long last_sample_time = 0;
 
@@ -63,6 +63,7 @@ int consistency_sample_count = 0;
 
 bool heating = false;
 bool appliance = false;
+bool sample_complete = false;
 
 // Define User Types below here or use a .h file
 //
@@ -77,9 +78,9 @@ File myFile;
 
 // Define Functions below here or use other .ino or cpp files
 //
-bool inside_short_term_sampling_period(long last_sample_time, int inter_sample_delay)
+bool inside_short_term_sampling_period(long last_sample_time)
 {
-	if (millis() >= last_sample_time + inter_sample_delay)
+	if (millis() >= (last_sample_time + INTER_SAMPLE_DELAY))
 	{
 		return true;
 	}
@@ -103,12 +104,6 @@ bool valid_sample(int min, int max, int mean, int limit)
 		}
 	}
 
-}
-
-int sample_mean(long running_total)
-{
-	int mean = running_total / NUMBER_SAMPLES;
-	return mean;
 }
 
 void update_sensor_parameters()
@@ -287,54 +282,52 @@ void binarize_appliance_sensor_signal()
 
 void sampling_cycle()
 {
-	if (inside_short_term_sampling_period(last_sample_time, inter_sample_delay))
+	update_sensor_parameters();
+	sample_complete = inside_short_term_sampling_period(last_sample_time);
+	if (sample_complete)
 	{
-		update_sensor_parameters();
-
-		if (number_samples_read == NUMBER_SAMPLES)
+		heating_mean = heating_running_total / number_samples_read;
+		appliance_mean = appliance_running_total / number_samples_read;
+		binarize_appliance_sensor_signal();
+		if (valid_sample(min_heating_sensor, max_heating_sensor, heating_mean, CONSISTENCY_TOLERANCE))
 		{
-			heating_mean = heating_running_total / NUMBER_SAMPLES;
-			appliance_mean = appliance_running_total / NUMBER_SAMPLES;
-			binarize_appliance_sensor_signal();
-			if (valid_sample(min_heating_sensor, max_heating_sensor, heating_mean, CONSISTENCY_TOLERANCE))
-			{
-				add_to_heating_consistency_set();
-			}
-			if (valid_sample(min_appliance_sensor, max_appliance_sensor, appliance_mean, CONSISTENCY_TOLERANCE))
-			{
-				add_to_appliance_consistency_set();
-			}
-			reset_short_term_accumulators();
-
-			consistency_sample_count++;
-			if (consistency_sample_count == CONSISTENCY_SAMPLES)
-			{
-				heating_mean = consistency_running_total_heating / CONSISTENCY_SAMPLES;
-				appliance_mean = consistency_running_total_appliance / CONSISTENCY_SAMPLES;
-				if (consistency_heating_sample_count == CONSISTENCY_SAMPLES)
-				{
-					if (valid_sample(consistency_min_heating, consistency_max_heating, heating_mean, CONSISTENCY_TOLERANCE))
-					{
-						binarize_heating_sensor_signal();
-						add_to_heating_calibration_set();
-					}
-				}
-				if (consistency_appliance_sample_count == CONSISTENCY_SAMPLES)
-				{
-					if (valid_sample(consistency_min_appliance, consistency_max_appliance, appliance_mean, CONSISTENCY_TOLERANCE))
-					{
-						add_to_appliance_calibration_set();
-					}
-				}
-				reset_consistency_accumulators();
-			}
-
-			if (recalibrate(last_calibration_time))
-			{
-				perform_recalibration();
-				reset_calibration_accumulators();
-			}
+			add_to_heating_consistency_set();
 		}
+		if (valid_sample(min_appliance_sensor, max_appliance_sensor, appliance_mean, CONSISTENCY_TOLERANCE))
+		{
+			add_to_appliance_consistency_set();
+		}
+		reset_short_term_accumulators();
+
+		consistency_sample_count++;
+		if (consistency_sample_count == CONSISTENCY_SAMPLES)
+		{
+			heating_mean = consistency_running_total_heating / CONSISTENCY_SAMPLES;
+			appliance_mean = consistency_running_total_appliance / CONSISTENCY_SAMPLES;
+			if (consistency_heating_sample_count == CONSISTENCY_SAMPLES)
+			{
+				if (valid_sample(consistency_min_heating, consistency_max_heating, heating_mean, CONSISTENCY_TOLERANCE))
+				{
+					binarize_heating_sensor_signal();
+					add_to_heating_calibration_set();
+				}
+			}
+			if (consistency_appliance_sample_count == CONSISTENCY_SAMPLES)
+			{
+				if (valid_sample(consistency_min_appliance, consistency_max_appliance, appliance_mean, CONSISTENCY_TOLERANCE))
+				{
+					add_to_appliance_calibration_set();
+				}
+			}
+			reset_consistency_accumulators();
+		}
+
+		if (recalibrate(last_calibration_time))
+		{
+			perform_recalibration();
+			reset_calibration_accumulators();
+		}
+		last_sample_time = millis();
 	}
 }
 
