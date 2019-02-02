@@ -1,9 +1,9 @@
 // Visual Micro is in vMicro>General>Tutorial Mode
 // 
 /*
-    Name:       strom kasten 2.ino
-    Created:	24/01/2019 20:17:56
-    Author:     LAPTOP-CELLS40J\v_sam
+	Name:       strom kasten 2.ino
+	Created:  24/01/2019 20:17:56
+	Author:     LAPTOP-CELLS40J\v_sam
 */
 
 
@@ -17,7 +17,7 @@
 #define APPLIANCE_LOWER_HYSTERESIS 4
 #define APPLIANCE_UPPER_HYSTERESIS 4
 #define NUMBER_SAMPLES 10
-#define CALIBRATION_INTERVAL 600000
+#define CALIBRATION_INTERVAL 30000
 #define CONSISTENCY_SAMPLES 5
 #define CONSISTENCY_TOLERANCE 20
 #define INTER_SAMPLE_DELAY 1
@@ -45,7 +45,7 @@ int calibration_max_appliance = 0;
 
 long last_calibration_time = 0;
 
-int threshold_lower_heating = 100;
+int threshold_lower_heating = 400;
 int threshold_upper_heating = 600;
 int threshold_lower_appliance = 100;
 int threshold_upper_appliance = 600;
@@ -207,7 +207,14 @@ void perform_recalibration()
 	threshold_lower_heating = calibration_min_heating + range_heating / HEATING_LOWER_HYSTERESIS;
 	threshold_upper_heating = calibration_max_heating - range_heating / HEATING_UPPER_HYSTERESIS;
 	threshold_lower_appliance = calibration_min_appliance + range_appliance / APPLIANCE_LOWER_HYSTERESIS;
-	threshold_upper_appliance = calibration_max_appliance + range_appliance / APPLIANCE_UPPER_HYSTERESIS;
+	threshold_upper_appliance = calibration_max_appliance - range_appliance / APPLIANCE_UPPER_HYSTERESIS;
+
+	Serial.println();
+	Serial.println("Performing Recalibration");
+	send_min_max_values_to_monitor();
+	send_heating_values_to_monitor();
+	send_appliance_values_to_monitor();
+	Serial.println();
 
 	last_calibration_time = millis();
 }
@@ -239,9 +246,45 @@ void reset_consistency_accumulators()
 void reset_calibration_accumulators()
 {
 	calibration_min_heating = 10000;
-	calibration_max_appliance = 0;
+	calibration_max_heating = 0;
 	calibration_min_appliance = 10000;
 	calibration_max_appliance = 0;
+}
+
+void send_min_max_values_to_monitor()
+{
+	Serial.print("Min and Max heating: ");
+	Serial.print(calibration_min_heating);
+	Serial.print(", ");
+	Serial.println(calibration_max_heating);
+	Serial.print("Min and Max appliance: ");
+	Serial.print(calibration_min_appliance);
+	Serial.print(", ");
+	Serial.println(calibration_max_appliance);
+}
+
+void send_heating_values_to_monitor()
+{
+	Serial.print("Heating new value: ");
+	Serial.print(heating);
+	Serial.print(", ");
+	Serial.print(heating_mean);
+	Serial.print(", ");
+	Serial.print(threshold_lower_heating);
+	Serial.print(", ");
+	Serial.println(threshold_upper_heating);
+}
+
+void send_appliance_values_to_monitor()
+{
+	Serial.print("Appliance new value: ");
+	Serial.print(appliance);
+	Serial.print(", ");
+	Serial.print(appliance_mean);
+	Serial.print(", ");
+	Serial.print(threshold_lower_appliance);
+	Serial.print(", ");
+	Serial.println(threshold_upper_appliance);
 }
 
 void binarize_heating_sensor_signal()
@@ -249,15 +292,13 @@ void binarize_heating_sensor_signal()
 	if (heating && (heating_mean < threshold_lower_heating))
 	{
 		heating = false;
-		Serial.print("Heating new value: ");
-		Serial.println(heating);
+		send_heating_values_to_monitor();
 		digitalWrite(HEATING_MONITOR_PIN, LOW);
 	}
 	else if (!heating && (heating_mean > threshold_upper_heating))
 	{
 		heating = true;
-		Serial.print("Heating new value: ");
-		Serial.println(heating);
+		send_heating_values_to_monitor();
 		digitalWrite(HEATING_MONITOR_PIN, HIGH);
 	}
 }
@@ -267,15 +308,13 @@ void binarize_appliance_sensor_signal()
 	if (appliance && (appliance_mean < threshold_lower_appliance))
 	{
 		appliance = false;
-		Serial.print("Appliance new value: ");
-		Serial.println(appliance);
+		send_appliance_values_to_monitor();
 		digitalWrite(APPLIANCE_MONITOR_PIN, LOW);
 	}
 	else if (!appliance && (appliance_mean > threshold_upper_appliance))
 	{
 		appliance = true;
-		Serial.print("Appliance new value: ");
-		Serial.println(appliance);
+		send_appliance_values_to_monitor();
 		digitalWrite(APPLIANCE_MONITOR_PIN, HIGH);
 	}
 }
@@ -284,6 +323,7 @@ void sampling_cycle()
 {
 	update_sensor_parameters();
 	sample_complete = inside_short_term_sampling_period(last_sample_time);
+	// Serial.println(sample_complete);
 	if (sample_complete)
 	{
 		heating_mean = heating_running_total / number_samples_read;
