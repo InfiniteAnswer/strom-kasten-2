@@ -1,9 +1,9 @@
 // Visual Micro is in vMicro>General>Tutorial Mode
 // 
 /*
-	Name:       strom kasten 2.ino
-	Created:  24/01/2019 20:17:56
-	Author:     LAPTOP-CELLS40J\v_sam
+  Name:       strom kasten 2.ino
+  Created:  24/01/2019 20:17:56
+  Author:     LAPTOP-CELLS40J\v_sam
 */
 
 
@@ -17,10 +17,13 @@
 #define APPLIANCE_LOWER_HYSTERESIS 4
 #define APPLIANCE_UPPER_HYSTERESIS 4
 #define NUMBER_SAMPLES 10
-#define CALIBRATION_INTERVAL 30000
+#define CALIBRATION_INTERVAL 300000
 #define CONSISTENCY_SAMPLES 5
 #define CONSISTENCY_TOLERANCE 20
 #define INTER_SAMPLE_DELAY 1
+
+#define dateTimeMsgLength 13
+#define dateTimeMsgHeader 'X'
 
 int number_samples_read = 0;
 long last_sample_time = 0;
@@ -64,6 +67,8 @@ int consistency_sample_count = 0;
 bool heating = false;
 bool appliance = false;
 bool sample_complete = false;
+
+String heating_data_buffer = "";
 
 // Define User Types below here or use a .h file
 //
@@ -287,6 +292,46 @@ void send_appliance_values_to_monitor()
 	Serial.println(threshold_upper_appliance);
 }
 
+void log_entry(char entry_type, bool value) {
+	String text_to_print;
+	text_to_print = millis() + String(",") + String(entry_type) + "," + String(value) + "\r\n";
+
+	if (entry_type == 'H') {
+		heating_data_buffer += text_to_print;
+	}
+	else {
+		myFile = SD.open("test.txt", FILE_WRITE);
+		if (heating_data_buffer != "") {
+			myFile.print(heating_data_buffer);
+			heating_data_buffer = "";
+		}
+		myFile.print(text_to_print);
+		myFile.close();
+	}
+}
+
+void serial_sync_time() {
+	String newDateTime;
+	String text_to_print;
+	char d;
+
+	while (Serial.available() >= dateTimeMsgLength) {
+		if (Serial.read() == dateTimeMsgHeader) {
+			for (int i = 0; i < dateTimeMsgLength; i++) {
+				char c = Serial.read();
+				newDateTime += c;
+			}
+			newDateTime.remove(newDateTime.length() - 1);
+			text_to_print = millis() + String(",S,") + newDateTime;
+			Serial.println(text_to_print);
+
+			myFile = SD.open("test.txt", FILE_WRITE);
+			myFile.println(text_to_print);
+			myFile.close();
+		}
+	}
+}
+
 void binarize_heating_sensor_signal()
 {
 	if (heating && (heating_mean < threshold_lower_heating))
@@ -294,13 +339,16 @@ void binarize_heating_sensor_signal()
 		heating = false;
 		send_heating_values_to_monitor();
 		digitalWrite(HEATING_MONITOR_PIN, LOW);
+		log_entry('H', heating);
 	}
 	else if (!heating && (heating_mean > threshold_upper_heating))
 	{
 		heating = true;
 		send_heating_values_to_monitor();
 		digitalWrite(HEATING_MONITOR_PIN, HIGH);
+		log_entry('H', heating);
 	}
+
 }
 
 void binarize_appliance_sensor_signal()
@@ -310,12 +358,14 @@ void binarize_appliance_sensor_signal()
 		appliance = false;
 		send_appliance_values_to_monitor();
 		digitalWrite(APPLIANCE_MONITOR_PIN, LOW);
+		log_entry('A', appliance);
 	}
 	else if (!appliance && (appliance_mean > threshold_upper_appliance))
 	{
 		appliance = true;
 		send_appliance_values_to_monitor();
 		digitalWrite(APPLIANCE_MONITOR_PIN, HIGH);
+		log_entry('A', appliance);
 	}
 }
 
@@ -376,6 +426,13 @@ void setup()
 {
 	Serial.begin(115200);
 	Serial.flush();
+
+	if (!SD.begin(4))
+	{
+		Serial.println("initialization failed!");
+		while (1);
+	}
+
 	Serial.println("Starting...");
 	pinMode(HEATING_MONITOR_PIN, OUTPUT);
 	pinMode(APPLIANCE_MONITOR_PIN, OUTPUT);
