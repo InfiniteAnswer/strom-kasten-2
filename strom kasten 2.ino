@@ -25,6 +25,8 @@
 #define dateTimeMsgLength 13
 #define dateTimeMsgHeader 'X'
 
+#define perform_dump true
+
 int number_samples_read = 0;
 long last_sample_time = 0;
 
@@ -75,6 +77,7 @@ String heating_data_buffer = "";
 #include <SPI.h>
 #include <SD.h>
 File myFile;
+File fullDump;
 
 
 // Define Function Prototypes that use User Types below here or use a .h file
@@ -310,6 +313,14 @@ void log_entry(char entry_type, bool value) {
 	}
 }
 
+void dump(int value) {
+	String text_to_print;
+	text_to_print = millis() + String(",") + String(value) + "\r\n";
+	fullDump = SD.open("dump.txt", FILE_WRITE);
+	fullDump.print(text_to_print);
+	fullDump.close();
+}
+
 void serial_sync_time() {
 	String newDateTime;
 	String text_to_print;
@@ -379,6 +390,10 @@ void sampling_cycle()
 		heating_mean = heating_running_total / number_samples_read;
 		appliance_mean = appliance_running_total / number_samples_read;
 		binarize_appliance_sensor_signal();
+		if (perform_dump)
+		{
+			dump(heating_mean);
+		}
 		if (valid_sample(min_heating_sensor, max_heating_sensor, heating_mean, CONSISTENCY_TOLERANCE))
 		{
 			add_to_heating_consistency_set();
