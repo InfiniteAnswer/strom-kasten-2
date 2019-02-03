@@ -19,7 +19,7 @@
 #define NUMBER_SAMPLES 10
 #define CALIBRATION_INTERVAL 300000
 #define CONSISTENCY_SAMPLES 5
-#define CONSISTENCY_TOLERANCE 20
+#define CONSISTENCY_TOLERANCE 30
 #define INTER_SAMPLE_DELAY 1
 
 #define dateTimeMsgLength 13
@@ -207,6 +207,42 @@ bool recalibrate(long last_calibration_time)
 	}
 }
 
+void send_min_max_values_to_monitor()
+{
+	Serial.print("Min and Max heating: ");
+	Serial.print(calibration_min_heating);
+	Serial.print(", ");
+	Serial.println(calibration_max_heating);
+	Serial.print("Min and Max appliance: ");
+	Serial.print(calibration_min_appliance);
+	Serial.print(", ");
+	Serial.println(calibration_max_appliance);
+}
+
+void send_heating_values_to_monitor()
+{
+	Serial.print("Heating new value: ");
+	Serial.print(heating);
+	Serial.print(", ");
+	Serial.print(heating_mean);
+	Serial.print(", ");
+	Serial.print(threshold_lower_heating);
+	Serial.print(", ");
+	Serial.println(threshold_upper_heating);
+}
+
+void send_appliance_values_to_monitor()
+{
+	Serial.print("Appliance new value: ");
+	Serial.print(appliance);
+	Serial.print(", ");
+	Serial.print(appliance_mean);
+	Serial.print(", ");
+	Serial.print(threshold_lower_appliance);
+	Serial.print(", ");
+	Serial.println(threshold_upper_appliance);
+}
+
 void perform_recalibration()
 {
 	int range_heating = calibration_max_heating - calibration_min_heating;
@@ -259,42 +295,6 @@ void reset_calibration_accumulators()
 	calibration_max_appliance = 0;
 }
 
-void send_min_max_values_to_monitor()
-{
-	Serial.print("Min and Max heating: ");
-	Serial.print(calibration_min_heating);
-	Serial.print(", ");
-	Serial.println(calibration_max_heating);
-	Serial.print("Min and Max appliance: ");
-	Serial.print(calibration_min_appliance);
-	Serial.print(", ");
-	Serial.println(calibration_max_appliance);
-}
-
-void send_heating_values_to_monitor()
-{
-	Serial.print("Heating new value: ");
-	Serial.print(heating);
-	Serial.print(", ");
-	Serial.print(heating_mean);
-	Serial.print(", ");
-	Serial.print(threshold_lower_heating);
-	Serial.print(", ");
-	Serial.println(threshold_upper_heating);
-}
-
-void send_appliance_values_to_monitor()
-{
-	Serial.print("Appliance new value: ");
-	Serial.print(appliance);
-	Serial.print(", ");
-	Serial.print(appliance_mean);
-	Serial.print(", ");
-	Serial.print(threshold_lower_appliance);
-	Serial.print(", ");
-	Serial.println(threshold_upper_appliance);
-}
-
 void log_entry(char entry_type, bool value) {
 	String text_to_print;
 	text_to_print = millis() + String(",") + String(entry_type) + "," + String(value) + "\r\n";
@@ -313,9 +313,9 @@ void log_entry(char entry_type, bool value) {
 	}
 }
 
-void dump(int value) {
+void dump(int value_heating, int value_appliance) {
 	String text_to_print;
-	text_to_print = millis() + String(",") + String(value) + "\r\n";
+	text_to_print = millis() + String(",") + String(value_heating) + String(",") + String(value_appliance) + "\r\n";
 	fullDump = SD.open("dump.txt", FILE_WRITE);
 	fullDump.print(text_to_print);
 	fullDump.close();
@@ -392,7 +392,7 @@ void sampling_cycle()
 		binarize_appliance_sensor_signal();
 		if (perform_dump)
 		{
-			dump(heating_mean);
+			dump(heating_mean, appliance_mean);
 		}
 		if (valid_sample(min_heating_sensor, max_heating_sensor, heating_mean, CONSISTENCY_TOLERANCE))
 		{
